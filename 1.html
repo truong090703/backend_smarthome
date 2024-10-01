@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Điều khiển đèn & Dữ liệu cảm biến</title>
+</head>
+<body>
+    <h1>Điều khiển đèn</h1>
+    
+    <div>
+        <h2>LED 1</h2>
+        <button id="led1-on">Bật LED 1</button>
+        <button id="led1-off">Tắt LED 1</button>
+    </div>
+    
+    <div>
+        <h2>LED 2</h2>
+        <button id="led2-on">Bật LED 2</button>
+        <button id="led2-off">Tắt LED 2</button>
+    </div>
+    
+    <h2>Dữ liệu cảm biến</h2>
+    <p>Nhiệt độ: <span id="temperature">--</span> °C</p>
+    <p>Độ ẩm: <span id="humidity">--</span> %</p>
+
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script>
+        // Kết nối đến MQTT Broker
+        const client = mqtt.connect('wss://bca5208c07354d41b2ec65c6f6ad9f36.s1.eu.hivemq.cloud:8884/mqtt', {
+            username: 'truong0907',
+            password: 'Truong123'
+        });
+
+        // Kết nối thành công
+        client.on('connect', () => {
+            console.log('Connected to MQTT broker');
+            
+            // Subscribe để nhận dữ liệu từ cảm biến
+            client.subscribe('home/sensor');
+        });
+
+        // Xử lý tin nhắn MQTT
+        client.on('message', (topic, message) => {
+            if (topic === 'home/sensor') {
+                const sensorData = JSON.parse(message.toString());
+                document.getElementById('temperature').innerText = sensorData.temperature;
+                document.getElementById('humidity').innerText = sensorData.humidity;
+                console.log('Received sensor data:', sensorData);
+            }
+        });
+
+        // Bật LED 1
+        document.getElementById('led1-on').addEventListener('click', () => {
+            client.publish('home/led1', 'on');
+            console.log('LED 1 đã bật');
+        });
+
+        // Tắt LED 1
+        document.getElementById('led1-off').addEventListener('click', () => {
+            client.publish('home/led1', 'off');
+            console.log('LED 1 đã tắt');
+        });
+
+        // Bật LED 2
+        document.getElementById('led2-on').addEventListener('click', () => {
+            client.publish('home/led2', 'on');
+            console.log('LED 2 đã bật');
+        });
+
+        // Tắt LED 2
+        document.getElementById('led2-off').addEventListener('click', () => {
+            client.publish('home/led2', 'off');
+            console.log('LED 2 đã tắt');
+        });
+    </script>
+</body>
+</html>
