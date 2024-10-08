@@ -1,10 +1,12 @@
-const mqtt = require('mqtt'); // Thư viện MQTT
-const mongoose = require('mongoose'); // Thư viện MongoDB
-const express = require('express'); // Thư viện Express
-const bodyParser = require('body-parser'); // Để xử lý JSON body trong request
+require('dotenv').config();
+
+const mqtt = require('mqtt');
+const mongoose = require('mongoose');
+const express = require('express');
+const bodyParser = require('body-parser');
 
 // Kết nối đến MongoDB
-mongoose.connect('mongodb://localhost:27017/smart-home', {
+mongoose.connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
 })
@@ -25,22 +27,30 @@ const ledSchema = new mongoose.Schema({
     timestamp: { type: Date, default: Date.now }
 });
 
+// Định nghĩa schema cho trạng thái thẻ RFID và cửa
+const rfidSchema = new mongoose.Schema({
+    uid: String, // UID của thẻ RFID
+    doorStatus: String, // Trạng thái cửa ('open' hoặc 'close')
+    timestamp: { type: Date, default: Date.now }
+});
+
 // Tạo model cho MongoDB
 const SensorData = mongoose.model('SensorData', sensorSchema);
 const LedData = mongoose.model('LedData', ledSchema);
+const RfidData = mongoose.model('RfidData', rfidSchema); // Model cho RFID và cửa
 
 // Kết nối đến MQTT Broker
-const client = mqtt.connect('mqtts://bca5208c07354d41b2ec65c6f6ad9f36.s1.eu.hivemq.cloud', {
-    port: 8883,
-    username: 'truong0907',
-    password: 'Truong123'
+const client = mqtt.connect(process.env.MQTT_BROKER, {
+    port: process.env.MQTT_PORT,
+    username: process.env.MQTT_USERNAME,
+    password: process.env.MQTT_PASSWORD
 });
 
 // Khi kết nối thành công
 client.on('connect', () => {
     console.log('Connected to MQTT broker');
-    // Subscribe tới các topic 'home/sensor', 'home/led1', 'home/led2'
-    client.subscribe(['home/sensor', 'home/led1', 'home/led2']);
+    // Subscribe tới các topic 'home/sensor', 'home/led1', 'home/led2', 'home/door'
+    client.subscribe(['home/sensor', 'home/led1', 'home/led2', 'home/door']);
 });
 
 // Khi nhận được tin nhắn từ các topic
@@ -89,6 +99,26 @@ client.on('message', (topic, message) => {
         } else {
             console.log('Invalid LED data format');
         }
+
+    } else if (topic === 'home/door') {
+        console.log('Received door control data:', payload);
+
+        // Xử lý trạng thái cửa (mở/đóng) và lưu vào MongoDB
+        if (payload === 'open' || payload === 'close') {
+            const doorStatus = payload;
+
+            // Lưu trạng thái cửa và UID của thẻ
+            const newRfidData = new RfidData({
+                uid: 'DEADBEEF', // Thay thế bằng UID nhận được từ Arduino (giả sử ở đây là chuỗi UID)
+                doorStatus: doorStatus
+            });
+
+            newRfidData.save()
+                .then(() => console.log('RFID and door status saved to MongoDB'))
+                .catch(err => console.log('Error saving RFID data:', err));
+        } else {
+            console.log('Invalid door control data format');
+        }
     }
 });
 
@@ -116,7 +146,17 @@ app.get('/api/led-data', async (req, res) => {
     }
 });
 
+// Route để xem dữ liệu RFID và trạng thái cửa
+app.get('/api/rfid-data', async (req, res) => {
+    try {
+        const rfidData = await RfidData.find();
+        res.json(rfidData);
+    } catch (err) {
+        res.status(500).send('Error retrieving RFID data');
+    }
+});
 
+// Khởi động server
 const port = 3000;
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
